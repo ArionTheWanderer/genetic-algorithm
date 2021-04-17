@@ -8,20 +8,23 @@ import java.util.Scanner;
 
 public class NameGA {
 
-    private static final String characters = "abcdefghijklmnopqrstuvwxyz";
+    private static final String characters = "abcdefghijklmnopqrstuvwxyz ";
     private static final double mutationIndex = 0.2;
-    // private static final double survivorsIndex = 0.5;
-    private static final int initNumberOfIndividuals = 5;
+    private static final int initNumberOfIndividuals = 100;
+    private static boolean isFound = false;
+    private static int indexOfFound = 0;
 
     public static void main(String[] args) {
         Scanner in = new Scanner(System.in);
         System.out.println("Enter your name:");
-        boolean isEmptyName = false;
+        boolean isEmptyName = true;
         String name = "";
-        while (!isEmptyName) {
-            name = in.next().toLowerCase();
-            if (!name.isEmpty()) {
-                isEmptyName = true;
+        while (isEmptyName) {
+            name = in.nextLine().toLowerCase();
+            if (name.isEmpty()) {
+                System.out.println("Input is empty. Please, try again.");
+            } else {
+                isEmptyName = false;
             }
         }
         int genotypeLength = name.length();
@@ -29,33 +32,43 @@ public class NameGA {
         List<String> allPopulation = new ArrayList<>();
         // Генерация начального потомства
         for (int i = 0; i < initNumberOfIndividuals; i++) {
-            String newString = generateRandomString(name.length());
+            String newString = generateRandomString(genotypeLength);
             allPopulation.add(i, newString);
         }
 
         // Начало цикла
-        for (int i = 0; i < 1000000; i++) {
+        for (int i = 0; i < 10000; i++) {
             Random random = new Random();
+            List<String> children = new ArrayList<>();
+
+            int border = allPopulation.size() / (genotypeLength - 1);
+            int letterBorder = 1;
+
             // формируем пары и их потомков
-            for (int j = 0; j < initNumberOfIndividuals; j++) {
+            for (int j = 0; j < allPopulation.size(); j++) {
                 int firstParent = random.nextInt(allPopulation.size());
                 int secondParent = -1;
                 while (secondParent != firstParent) {
                     secondParent = random.nextInt(allPopulation.size());
                 }
 
+                if (j == border) {
+                    border += border;
+                    letterBorder += 1;
+                }
+
                 // "рождение" потомка
-                String newChild = allPopulation.get(firstParent).substring(0, j + 1) +
-                        allPopulation.get(secondParent).substring(j + 1, genotypeLength);
-                allPopulation.add(newChild);
+                String newChild = allPopulation.get(firstParent).substring(0, letterBorder) +
+                        allPopulation.get(secondParent).substring(letterBorder, genotypeLength);
+                children.add(newChild);
             }
 
             // мутация
-            int numberOfMutants = (int) (allPopulation.size() * mutationIndex);
+            int numberOfMutants = (int) (children.size() * mutationIndex);
             for (int j = 0; j < numberOfMutants; j++) {
-                int mutantIndex = random.nextInt(allPopulation.size());
+                int mutantIndex = random.nextInt(children.size());
                 int numberOfLetterToReplace = random.nextInt(genotypeLength / 2) + 1;
-                String mutant = allPopulation.get(mutantIndex);
+                String mutant = children.get(mutantIndex);
                 List<Integer> indexesToReplace = new ArrayList<>();
                 int k = 0;
                 while(k != numberOfLetterToReplace) {
@@ -73,66 +86,76 @@ public class NameGA {
                         sb.append(mutant.charAt(l));
                     }
                 }
-                allPopulation.remove(mutantIndex);
-                allPopulation.add(mutantIndex, sb.toString());
+                children.remove(mutantIndex);
+                children.add(mutantIndex, sb.toString());
             }
+            allPopulation.addAll(children);
 
             // Вычисление fitness-функции
             List<Double> fitnessValues = new ArrayList<>();
             double sumOfSurvivalChances = 0d;
             for (int j = 0; j < allPopulation.size(); j++) {
-                double fitnessValue = 0;
+                double fitnessValue = 0d;
                 String anotherOne = allPopulation.get(j);
                 for (int k = 0; k < genotypeLength; k++) {
                     if (anotherOne.charAt(k) != name.charAt(k)) {
-                        fitnessValue += 1;
+                        fitnessValue += 1d;
                     }
                 }
                 fitnessValues.add(j, fitnessValue);
-                sumOfSurvivalChances += 1d / fitnessValue;
-            }
-
-            // Вычисление шансов на выживание для каждой отдельной особи
-            List<Double> survivalChances = new ArrayList<>();
-            for (int j = 0; j < fitnessValues.size(); j++) {
-                double survivalChance = fitnessValues.get(j) / sumOfSurvivalChances;
-                survivalChances.add(j, survivalChance);
-            }
-
-            List<Integer> indexesToDelete = new ArrayList<>();
-            // Селекция (по парам)
-            for (int j = 0; j < survivalChances.size(); j += 2) {
-                if (survivalChances.get(j) < survivalChances.get(j + 1)) {
-                    indexesToDelete.add(j);
-                } else {
-                    indexesToDelete.add(j + 1);
-                }
-            }
-            for (int j = allPopulation.size() - 1; j >= 0; j--) {
-                if (indexesToDelete.contains(j)) {
-                    allPopulation.remove(j);
-                    fitnessValues.remove(j);
+                if (fitnessValue != 0d)
+                    sumOfSurvivalChances += 1d / fitnessValue;
+                else {
+                    // найден подходящий
+                    isFound = true;
+                    indexOfFound = j;
+                    break;
                 }
             }
 
-            if (fitnessValues.contains(0d)) {
-                int index = fitnessValues.indexOf(0d);
-                String generatedName = allPopulation.get(index);
-                System.out.println("The name " + generatedName + " was generated!");
-                break;
-            } else {
-                double max = -1d;
-                int indexOfMaxValue = -1;
+            // Если еще не найдена подходящая строка
+            if (!isFound) {
+                // Вычисление шансов на выживание для каждой отдельной особи
+                List<Double> survivalChances = new ArrayList<>();
                 for (int j = 0; j < fitnessValues.size(); j++) {
-                    if (fitnessValues.get(j) > max) {
-                        max = fitnessValues.get(j);
-                        indexOfMaxValue = j;
+                    double survivalChance = 1d / fitnessValues.get(j) / sumOfSurvivalChances;
+                    survivalChances.add(j, survivalChance);
+                }
+
+                List<Integer> indexesToDelete = new ArrayList<>();
+                // Селекция (по парам)
+                for (int j = 0; j < survivalChances.size(); j += 2) {
+                    if (j == survivalChances.size() - 1)
+                        break;
+                    if (survivalChances.get(j) < survivalChances.get(j + 1)) {
+                        indexesToDelete.add(j);
+                    } else {
+                        indexesToDelete.add(j + 1);
                     }
                 }
-                String fittestOne = allPopulation.get(indexOfMaxValue);
-                System.out.println("At this iteration the fittest one is - " + fittestOne);
-            }
+                for (int j = allPopulation.size() - 1; j >= 0; j--) {
+                    if (indexesToDelete.contains(j)) {
+                        allPopulation.remove(j);
+                        fitnessValues.remove(j);
+                        survivalChances.remove(j);
+                    }
+                }
 
+                double min = 100000;
+                int indexOfMinValue = -1;
+                for (int j = 0; j < fitnessValues.size(); j++) {
+                    if (fitnessValues.get(j) < min) {
+                        min = fitnessValues.get(j);
+                        indexOfMinValue = j;
+                    }
+                }
+                String fittestOne = allPopulation.get(indexOfMinValue);
+                System.out.println("At " + i + "'th" + " iteration the fittest one is - \"" + fittestOne +"\"");
+            } else {
+                String generatedName = allPopulation.get(indexOfFound);
+                System.out.println("The name \"" + generatedName + "\" was generated at the " + i + "'th iteration!");
+                break;
+            }
         }
     }
 
@@ -146,5 +169,4 @@ public class NameGA {
 
         return sb.toString();
     }
-
 }
